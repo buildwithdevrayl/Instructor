@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClassroomReserve | Instructor Portal</title>
+    <link rel="stylesheet" href="instructor.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://script.google.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+
+<div id="authScreen" class="auth-screen">
+    <div class="auth-image">
+        <div class="auth-overlay">
+            <div class="brand">
+                <i data-lucide="graduation-cap"></i>
+                <span>ClassroomReserve</span>
+            </div>
+
+            <div class="auth-message">
+                <h1>Find the perfect classroom for your next class.</h1>
+                <p>Reserve university classrooms easily, check availability, and manage your bookings in one place.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-content">
+        <div class="auth-box">
+
+            <div class="mobile-brand">
+                <i data-lucide="graduation-cap"></i>
+                ClassroomReserve
+            </div>
+
+            <div id="loginForm">
+                <h2>Instructor Login</h2>
+                <p class="muted">Welcome back! Sign in to your account.</p>
+
+                <form id="instructorLoginForm">
+                    <label>Email Address</label>
+                    <input type="email" id="loginEmail" name="email" autocomplete="username" placeholder="Enter your email" required>
+
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" name="password" autocomplete="current-password" placeholder="Enter your password" required>
+
+                    <label class="remember-row">
+                        <input type="checkbox" id="rememberMe" checked>
+                        Remember me on this device
+                    </label>
+
+                    <div class="forgot-row">
+                        <button type="button" class="text-btn" id="showForgot">Forgot password?</button>
+                    </div>
+
+                    <button type="submit" class="btn-primary full-btn">
+                        Sign In
+                    </button>
+                </form>
+
+                <p class="auth-switch">
+                    Don't have an account?
+                    <button type="button" class="text-btn" id="showRegister">
+                        Create Account
+                    </button>
+                </p>
+            </div>
+
+            <div id="forgotForm" class="hidden">
+                <h2>Forgot Password</h2>
+                <p class="muted" id="forgotHint">Enter your registered email. We will send you a 6-digit reset code.</p>
+
+                <form id="forgotRequestForm">
+                    <label>Email Address</label>
+                    <input type="email" id="forgotEmail" placeholder="Enter your email" required>
+
+                    <button type="submit" class="btn-primary full-btn">Send Reset Code</button>
+                </form>
+
+                <form id="forgotResetForm" class="hidden">
+                    <label>6-digit Code</label>
+                    <input type="text" id="forgotCode" inputmode="numeric" maxlength="6" placeholder="Enter the code from your email" required>
+
+                    <label>New Password</label>
+                    <input type="password" id="forgotNewPassword" minlength="8" placeholder="At least 8 characters" required>
+
+                    <label>Confirm New Password</label>
+                    <input type="password" id="forgotConfirmPassword" minlength="8" placeholder="Confirm new password" required>
+
+                    <button type="submit" class="btn-primary full-btn">Reset Password</button>
+                </form>
+
+                <p class="auth-switch">
+                    Remembered it?
+                    <button type="button" class="text-btn" id="backToLogin">Back to Sign In</button>
+                </p>
+            </div>
+
+            <div id="registerForm" class="hidden">
+                <h2>Create Instructor Account</h2>
+                <p class="muted">Register to reserve university classrooms.</p>
+
+                <form id="instructorRegisterForm">
+                    <label>Full Name</label>
+                    <input type="text" id="regName" placeholder="Enter full name" required>
+
+                    <label>Employee ID</label>
+                    <input type="text" id="regEmployeeID" placeholder="Enter employee ID" required>
+
+                    <label>Department</label>
+                    <input type="text" id="regDepartment" placeholder="Enter department" required>
+
+                    <label>Email Address</label>
+                    <input type="email" id="regEmail" placeholder="Enter email address" required>
+
+                    <label>Contact Number</label>
+                    <input type="tel" id="regContact" placeholder="Enter contact number">
+
+                    <label>Password</label>
+                    <input type="password" id="regPassword" placeholder="Create password" required minlength="8">
+
+                    <label>Confirm Password</label>
+                    <input type="password" id="regConfirmPassword" placeholder="Confirm password" required>
+
+                    <button type="submit" class="btn-primary full-btn">
+                        Create Account
+                    </button>
+                </form>
+
+                <p class="auth-switch">
+                    Already registered?
+                    <button type="button" class="text-btn" id="showLogin">
+                        Sign In
+                    </button>
+                </p>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ================= MAIN APPLICATION ================= -->
+
+<div id="appScreen" class="app hidden">
+
+    <!-- SIDEBAR -->
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i data-lucide="graduation-cap"></i>
+            <div>
+                <h2>ClassroomReserve</h2>
+                <span>Instructor Portal</span>
+            </div>
+        </div>
+
+        <div class="sidebar-menu">
+            <p class="menu-label">MAIN MENU</p>
+
+            <button class="nav-item active" data-page="dashboard">
+                <i data-lucide="layout-dashboard"></i>
+                <span>Dashboard</span>
+            </button>
+
+            <button class="nav-item" data-page="classrooms">
+                <i data-lucide="door-open"></i>
+                <span>Browse Classrooms</span>
+            </button>
+
+            <button class="nav-item" data-page="calendar">
+                <i data-lucide="calendar-days"></i>
+                <span>Room Calendar</span>
+            </button>
+
+            <button class="nav-item" data-page="reservation">
+                <i data-lucide="calendar-plus"></i>
+                <span>Make Reservation</span>
+            </button>
+
+            <button class="nav-item" data-page="myReservations">
+                <i data-lucide="calendar-check"></i>
+                <span>My Reservations</span>
+            </button>
+
+            <button class="nav-item" data-page="history">
+                <i data-lucide="history"></i>
+                <span>Reservation History</span>
+            </button>
+
+            <button class="nav-item" data-page="notifications">
+                <i data-lucide="bell"></i>
+                <span>Notifications</span>
+                <span class="nav-count hidden" id="notificationCount">0</span>
+            </button>
+
+            <button class="nav-item" data-page="feedback">
+                <i data-lucide="message-square-warning"></i>
+                <span>Report / Feedback</span>
+            </button>
+
+            <p class="menu-label">ACCOUNT</p>
+
+            <button class="nav-item" data-page="profile">
+                <i data-lucide="user-round"></i>
+                <span>My Profile</span>
+            </button>
+
+            <button class="nav-item" id="logoutBtn">
+                <i data-lucide="log-out"></i>
+                <span>Logout</span>
+            </button>
+        </div>
+
+        <div class="sidebar-footer">
+            <i data-lucide="building-2"></i>
+            <span>University Classroom System</span>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+
+    <main class="main-content">
+
+        <!-- TOP NAVIGATION -->
+
+        <header class="topbar">
+            <button class="icon-btn menu-toggle" id="menuToggle">
+                <i data-lucide="menu"></i>
+            </button>
+
+            <div class="breadcrumb">
+                <span>Instructor Portal</span>
+                <i data-lucide="chevron-right"></i>
+                <strong id="pageTitle">Dashboard</strong>
+            </div>
+
+            <div class="topbar-actions">
+                <button class="icon-btn" data-page="notifications">
+                    <i data-lucide="bell"></i>
+                    <span class="notification-dot"></span>
+                </button>
+
+                <div class="user-info">
+                    <div class="avatar" id="topAvatar">I</div>
+                    <div class="user-details">
+                        <strong id="topUserName">Instructor</strong>
+                        <span>Instructor</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- PAGE CONTAINER -->
+
+        <div class="page-container">
+
+            <!-- ================= DASHBOARD ================= -->
+
+            <section class="page active" id="page-dashboard">
+
+                <div class="welcome-banner">
+                    <div>
+                        <span class="welcome-tag">INSTRUCTOR DASHBOARD</span>
+                        <h1>Welcome, <span id="welcomeName">Instructor</span>!</h1>
+                        <p>Reserve and manage your university classrooms easily.</p>
+                        <button class="btn-light" data-page="classrooms">
+                            Browse Classrooms
+                            <i data-lucide="arrow-right"></i>
+                        </button>
+                    </div>
+                    <div class="welcome-icon">
+                        <i data-lucide="school"></i>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon blue">
+                            <i data-lucide="calendar-clock"></i>
+                        </div>
+                        <div>
+                            <span>Upcoming Bookings</span>
+                            <h2 id="statUpcoming">0</h2>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon green">
+                            <i data-lucide="calendar-check"></i>
+                        </div>
+                        <div>
+                            <span>Total Bookings</span>
+                            <h2 id="statTotal">0</h2>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon orange">
+                            <i data-lucide="bell"></i>
+                        </div>
+                        <div>
+                            <span>Notifications</span>
+                            <h2 id="statNotifications">0</h2>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon purple">
+                            <i data-lucide="door-open"></i>
+                        </div>
+                        <div>
+                            <span>Available Rooms</span>
+                            <h2 id="statRooms">0</h2>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-heading">
+                    <div>
+                        <h2>Available Classrooms</h2>
+                        <p>Explore classrooms for your next activity.</p>
+                    </div>
+                    <button class="btn-outline" data-page="classrooms">View All</button>
+                </div>
+
+                <div class="room-grid" id="dashboardRooms">
+                    <div class="empty-state">Loading classrooms...</div>
+                </div>
+
+                <div class="section-heading">
+                    <div>
+                        <h2>My Upcoming Reservations</h2>
+                        <p>Check your latest classroom bookings.</p>
+                    </div>
+                    <button class="btn-outline" data-page="myReservations">View All</button>
+                </div>
+
+                <div class="table-card">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Classroom</th>
+                                    <th>Purpose</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dashboardReservations">
+                                <tr><td colspan="5" class="empty-cell">Loading reservations...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ================= CLASSROOMS ================= -->
+
+            <section class="page" id="page-classrooms">
+
+                <div class="page-heading">
+                    <div>
+                        <h1>Browse Classrooms</h1>
+                        <p>Find a classroom that matches your requirements.</p>
+                    </div>
+                </div>
+
+                <div class="filter-bar">
+                    <div class="search-box">
+                        <i data-lucide="search"></i>
+                        <input type="search" id="roomSearch" placeholder="Search classroom...">
+                    </div>
+
+                    <select id="buildingFilter">
+                        <option value="">All Buildings</option>
+                    </select>
+
+                    <select id="capacityFilter">
+                        <option value="">Any Capacity</option>
+                        <option value="30">30+ Students</option>
+                        <option value="40">40+ Students</option>
+                        <option value="50">50+ Students</option>
+                    </select>
+                </div>
+
+                <div class="room-grid" id="classroomList">
+                    <div class="empty-state">Loading classrooms...</div>
+                </div>
+
+            </section>
+
+            <!-- ================= ROOM CALENDAR ================= -->
+
+            <section class="page" id="page-calendar">
+
+                <div class="page-heading">
+                    <div>
+                        <h1>Room Calendar</h1>
+                        <p>Check classroom schedules and availability.</p>
+                    </div>
+                </div>
+
+                <div class="calendar-controls">
+                    <select id="calendarRoom">
+                        <option value="">Select Classroom</option>
+                    </select>
+
+                    <input type="date" id="calendarDate">
+
+                    <button class="btn-primary" id="checkCalendarBtn">
+                        <i data-lucide="search"></i>
+                        Check Schedule
+                    </button>
+                </div>
+
+                <div class="calendar-legend">
+                    <span><i class="legend-dot available"></i> Available</span>
+                    <span><i class="legend-dot booked"></i> Reserved</span>
+                    <span><i class="legend-dot done"></i> Completed</span>
+                    <span><i class="legend-dot selected"></i> Selected</span>
+                </div>
+
+                <div class="calendar-card">
+                    <div class="calendar-header">
+                        <h3 id="calendarHeading">Classroom Schedule</h3>
+                        <span id="calendarRoomName">Select a room</span>
+                    </div>
+
+                    <div id="timeSlotContainer" class="time-slot-container">
+                        <div class="empty-state">
+                            Select a classroom and date to see available time slots.
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ================= RESERVATION FORM ================= -->
+
+            <section class="page" id="page-reservation">
+
+                <div class="page-heading">
+                    <div>
+                        <h1>Make Reservation</h1>
+                        <p>Complete the form to reserve a classroom.</p>
+                    </div>
+                </div>
+
+                <div class="form-card">
+                    <form id="reservationForm">
+
+                        <div class="form-section-title">
+                            <i data-lucide="door-open"></i>
+                            Classroom Information
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group full">
+                                <label>Select Classroom *</label>
+                                <select id="reserveRoom" required>
+                                    <option value="">Choose a classroom</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Number of Students *</label>
+                                <input type="number" id="reserveStudents" min="1" required placeholder="Enter student count">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Subject Units *</label>
+                                <select id="reserveUnits" required>
+                                    <option value="1">1 unit (1 hour)</option>
+                                    <option value="2">2 units (2 hours)</option>
+                                    <option value="3" selected>3 units (3 hours)</option>
+                                    <option value="4">4 units (4 hours)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Total Hours (automatic)</label>
+                                <input type="text" id="reserveTotalHours" readonly>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Start Time *</label>
+                                <input type="time" id="reserveStart" required>
+                            </div>
+
+                            <div class="form-group full">
+                                <label>Class Dates * <span class="muted">(click one or more days your subject meets)</span></label>
+                                <div id="datePicker" class="date-picker"></div>
+                            </div>
+
+                            <div class="form-group full">
+                                <label>Schedule (time is divided automatically by units)</label>
+                                <div id="schedulePreview" class="schedule-preview"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-section-title">
+                            <i data-lucide="clipboard-list"></i>
+                            Reservation Details
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group full">
+                                <label>Subject / Course *</label>
+                                <input type="text" id="reserveSubject" placeholder="Enter subject or course" required>
+                            </div>
+
+                            <div class="form-group full">
+                                <label>Purpose of Reservation *</label>
+                                <select id="reservePurpose" required>
+                                    <option value="">Select purpose</option>
+                                    <option value="Regular Class">Regular Class</option>
+                                    <option value="Lecture">Lecture</option>
+                                    <option value="Laboratory Activity">Laboratory Activity</option>
+                                    <option value="Meeting">Meeting</option>
+                                    <option value="Seminar">Seminar</option>
+                                    <option value="Examination">Examination</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group full">
+                                <label>Additional Notes</label>
+                                <textarea id="reserveNotes" rows="4" placeholder="Enter additional information..."></textarea>
+                            </div>
+                        </div>
+
+                        <div class="availability-notice">
+                            <i data-lucide="info"></i>
+                            Your reservation will be automatically confirmed if the classroom is available.
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="reset" class="btn-outline">Clear Form</button>
+                            <button type="submit" class="btn-primary">
+                                Confirm Reservation
+                                <i data-lucide="arrow-right"></i>
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+
+            </section>
+
+            <!-- ================= MY RESERVATIONS ================= -->
+
+            <section class="page" id="page-myReservations">
+
+                <div class="page-heading">
+                    <div>
+                        <h1>My Reservations</h1>
+                        <p>View and manage your classroom bookings.</p>
+                    </div>
+
+                    <button class="btn-primary" data-page="reservation">
+                        <i data-lucide="plus"></i>
+                        New Reservation
+                    </button>
+                </div>
+
+                <div class="filter-bar">
+                    <div class="search-box">
+                        <i data-lucide="search"></i>
+                        <input type="search" id="reservationSearch" placeholder="Search reservation...">
+                    </div>
+
+                    <select id="reservationStatusFilter">
+                        <option value="">All Status</option>
+                        <option value="Confirmed">Confirmed</option>
+                    </select>
+                </div>
+
+                <div class="table-card">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Reservation ID</th>
+                                    <th>Classroom</th>
+                                    <th>Subject</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Purpose</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="myReservationsList">
+                                <tr><td colspan="8" class="empty-cell">Loading reservations...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ================= HISTORY ================= -->
+
+            <section class="page" id="page-history">
+
+                <div class="page-heading">
+                    <div>
+                        <h1>Reservation History</h1>
+                        <p>Completed reservations are listed first. Cancelled ones are kept separately below.</p>
+                    </div>
+                    <div class="heading-actions">
+                        <button class="btn-outline danger-outline hidden" id="deleteArchivedHistoryBtn">Move All Archived to Trash</button>
+                        <button class="btn-outline danger-outline hidden" id="emptyTrashHistoryBtn">Empty Trash</button>
+                    </div>
+                </div>
+
+                <div class="view-tabs">
+                    <button type="button" class="view-tab active" data-hist-view="active">History</button>
+                    <button type="button" class="view-tab" data-hist-view="archived">Archived</button>
+                    <button type="button" class="view-tab" data-hist-view="trash">Trash</button>
+                </div>
+
+                <div class="section-heading">
+                    <div>
+                        <h2>Completed Reservations <span class="history-count" id="historyDoneCount">0</span></h2>
+                        <p>Classes and activities that have already taken place.</p>
+                    </div>
+                </div>
+
+                <div class="table-card">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Reservation ID</th>
+                                    <th>Classroom</th>
+                                    <th>Subject</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Purpose</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyList">
+                                <tr><td colspan="8" class="empty-cell">Loading history...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section-heading">
+                    <div>
+                        <h2>Cancelled Reservations <span class="history-count" id="historyCancelledCount">0</span></h2>
+                        <p>Bookings you cancelled.</p>
+                    </div>
+                </div>
+
+                <div class="table-card">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Reservation ID</th>
+                                    <th>Classroom</th>
+                                    <th>Subject</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Purpose</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cancelledList">
+                                <tr><td colspan="8" class="empty-cell">Loading history...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ================= NOTIFICATIONS ================= -->
+
+            <section class="page" id="page-notifications">
+
+                <div class="page-heading">
+                    <div>
+                        <h1>Notifications</h1>
+                        <p>Stay updated with your classroom reservations.</p>
+                    </div>
+                    <div class="heading-actions">
+                        <button class="btn-outline" id="markAllReadBtn">Mark All as Read</button>
+                        <button class="btn-outline danger-outline hidden" id="deleteArchivedNotifsBtn">Move All Archived to Trash</button>
+                        <button class="btn-outline danger-outline hidden" id="emptyTrashNotifsBtn">Empty Trash</button>
+                    </div>
+                </div>
+
+                <div class="view-tabs">
+                    <button type="button" class="view-tab active" data-notif-view="active">Inbox</button>
+                    <button type="button" class="view-tab" data-notif-view="archived">Archived</button>
+                    <button type="button" class="view-tab" data-notif-view="trash">Trash</button>
+                </div>
+
+                <div class="notification-list" id="notificationList">
+                    <div class="empty-state">Loading notifications...</div>
+                </div>
+
+            </section>
+
+            <!-- ================= REPORT / FEEDBACK ================= -->
+
+            <section class="page" id="page-feedback">
+
+                <div class="page-heading">
+                    <div>
+                        <h1>Report / Feedback</h1>
+                        <p>Report a problem with a classroom or send feedback. The administrator will receive it.</p>
+                    </div>
+                </div>
+
+                <div class="form-card">
+                    <form id="feedbackForm">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Type *</label>
+                                <select id="feedbackType" required>
+                                    <option value="Problem Report">Problem Report</option>
+                                    <option value="Feedback">Feedback</option>
+                                    <option value="Suggestion">Suggestion</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Classroom <span class="muted">(optional)</span></label>
+                                <select id="feedbackRoom">
+                                    <option value="">Not about a specific classroom</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group full">
+                                <label>Title *</label>
+                                <input type="text" id="feedbackTitle" maxlength="120" placeholder="e.g. Projector not working" required>
+                            </div>
+
+                            <div class="form-group full">
+                                <label>Message *</label>
+                                <textarea id="feedbackMessage" rows="5" maxlength="2000" placeholder="Describe the problem or share your feedback..." required></textarea>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="reset" class="btn-outline">Clear</button>
+                            <button type="submit" class="btn-primary">
+                                Send to Administrator
+                                <i data-lucide="send"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="section-heading">
+                    <div>
+                        <h2>My Submissions</h2>
+                        <p>Track what you sent and read the administrator's reply.</p>
+                    </div>
+                </div>
+
+                <div class="feedback-list" id="feedbackList">
+                    <div class="empty-state">Loading...</div>
+                </div>
+
+            </section>
+
+            <!-- ================= PROFILE ================= -->
+
+            <section class="page" id="page-profile">
+
+                <div class="page-heading">
+                    <div>
+                        <h1>My Profile</h1>
+                        <p>Manage your instructor information.</p>
+                    </div>
+                </div>
+
+                <div class="form-card">
+                    <form id="profileForm">
+
+                        <div class="profile-photo-row">
+                            <div class="profile-avatar" id="profileAvatar">I</div>
+                            <div>
+                                <label class="btn-outline photo-upload-btn" for="profilePhotoFile">
+                                    <i data-lucide="camera"></i> Upload Picture
+                                </label>
+                                <input type="file" id="profilePhotoFile" accept="image/png,image/jpeg,image/webp" hidden>
+                                <small class="muted photo-note">JPG, PNG or WebP. Resized automatically. Click Save Changes to keep it.</small>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Full Name</label>
+                                <input type="text" id="profileName" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Employee ID</label>
+                                <input type="text" id="profileEmployeeID" readonly>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Department</label>
+                                <input type="text" id="profileDepartment" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Email Address</label>
+                                <input type="email" id="profileEmail" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Contact Number</label>
+                                <input type="tel" id="profileContact">
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Save Changes</button>
+                        </div>
+
+                    </form>
+                </div>
+
+            </section>
+
+        </div>
+
+        <footer class="footer">
+            © <span id="currentYear"></span> ClassroomReserve. Classroom Reservation System.
+        </footer>
+
+    </main>
+
+</div>
+
+<!-- ================= CANCEL RESERVATION MODAL ================= -->
+
+<div class="modal hidden" id="cancelModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Cancel Reservation</h2>
+            <button class="icon-btn" id="closeCancelModal">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <p class="muted">Are you sure you want to cancel this reservation?</p>
+
+        <form id="cancelForm">
+            <input type="hidden" id="cancelReservationID">
+
+            <div class="form-group">
+                <label>Reason for Cancellation *</label>
+                <textarea id="cancelReason" rows="4" required placeholder="Please explain why you are cancelling..."></textarea>
+            </div>
+
+            <div class="availability-notice">
+                <i data-lucide="bell"></i>
+                The administrator will be notified when you cancel this booking.
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn-outline" id="cancelBackBtn">Go Back</button>
+                <button type="submit" class="btn-danger">Confirm Cancellation</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================= DELETE REPORT / FEEDBACK MODAL ================= -->
+
+<div class="modal hidden" id="deleteFeedbackModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Delete Report / Feedback</h2>
+            <button type="button" class="icon-btn" id="closeDeleteFeedback">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <p class="muted" id="deleteFeedbackName"></p>
+
+        <form id="deleteFeedbackForm">
+            <input type="hidden" id="deleteFeedbackID">
+
+            <div class="form-group">
+                <label>Reason for Deleting *</label>
+                <textarea id="deleteFeedbackReason" rows="4" required maxlength="500" placeholder="Please explain why you are deleting this..."></textarea>
+            </div>
+
+            <div class="availability-notice">
+                <i data-lucide="bell"></i>
+                This will also be removed from the administrator's list. The administrator will be notified with your reason.
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn-outline" id="deleteFeedbackBack">Go Back</button>
+                <button type="submit" class="btn-danger">Confirm Delete</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================= ROOM DETAILS MODAL ================= -->
+
+<div class="modal hidden" id="roomModal">
+    <div class="modal-content room-modal-content">
+        <button class="icon-btn modal-close" id="closeRoomModal">
+            <i data-lucide="x"></i>
+        </button>
+        <div id="roomModalContent"></div>
+    </div>
+</div>
+
+<!-- ================= MESSAGE ================= -->
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="script.js"></script>
+<script>
+    lucide.createIcons();
+    document.getElementById("currentYear").textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>
