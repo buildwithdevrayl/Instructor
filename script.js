@@ -757,13 +757,17 @@ function clearSession() {
     instructorUser = null;
 }
 
+let dataVer = "";
+
 async function loadAll(opts = {}) {
     try {
         let data;
 
         try {
             // One request for everything (fast)
-            data = await apiGet("getBootstrap");
+            // background refresh: send the version we have; the server answers
+            // "unchanged" (a few bytes) when nothing new happened
+            data = await apiGet("getBootstrap", opts.silent && !opts.force && dataVer ? {since: dataVer} : {});
         } catch (error) {
             if (!/unknown action/i.test(error.message)) throw error;
 
@@ -783,6 +787,14 @@ async function loadAll(opts = {}) {
                 dashboard: dashboardData.data
             };
         }
+
+        if (data.unchanged) {
+            // nothing new on the server: only refresh the time-based lists
+            renderReservations();
+            renderHistory();
+            return;
+        }
+        dataVer = data.ver || "";
 
         rooms = data.rooms || [];
         reservations = (data.reservations || []).map(normRes);
@@ -1027,7 +1039,7 @@ function describeRes(r) {
 async function setResView(ids, view) {
     const result = await apiPost("setReservationView", {reservationIDs: ids, view});
     if ((result.count || 0) < ids.length) {
-        await loadAll({silent: true});   // show what the server really has
+        await loadAll({silent: true, force: true});   // show what the server really has
         throw new Error("The change could not be saved on the server. Please try again.");
     }
     reservations.forEach(r => { if (ids.includes(r.ReservationID)) r.InstructorView = view; });
