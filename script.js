@@ -1,3 +1,433 @@
+/* DARK MODE (self-contained: styles + toggle button)
+   - Applies the saved theme before the page paints (no white flash).
+   - First visit follows the device setting (light / dark).
+   - Adds a sun/moon button; the choice is remembered in localStorage and
+     separately for each portal (student, instructor, admin). */
+(function () {
+    var KEY = "cr_theme_instructor";   // each portal keeps its OWN dark-mode setting
+    var root = document.documentElement;
+
+    /* Dark colors are built into this file, so no extra css file is needed. */
+    if (!document.getElementById("cr-dark-css")) {
+        var darkStyle = document.createElement("style");
+        darkStyle.id = "cr-dark-css";
+        darkStyle.textContent = `
+/* =========================================================
+   CLASSROOMRESERVE - DARK MODE (student, instructor, admin)
+   Load AFTER the page's own css. Everything dark lives under
+   html[data-theme="dark"]; light mode is not touched.
+========================================================= */
+
+/* ---------- theme button (works in light + dark) ---------- */
+.theme-toggle .i-sun { display: none; }
+html[data-theme="dark"] .theme-toggle .i-sun { display: block; }
+html[data-theme="dark"] .theme-toggle .i-moon { display: none; }
+.theme-toggle svg { flex-shrink: 0; }
+
+.s-actions { display: flex; align-items: center; gap: 8px; }
+.s-refresh.s-theme { padding: 9px 11px; }
+
+
+@media print { .theme-toggle, .theme-fab { display: none !important; } }
+
+/* =========================================================
+   DARK
+========================================================= */
+html[data-theme="dark"] { color-scheme: dark; }
+
+html[data-theme="dark"] {
+    /* shared palette */
+    --d-bg: #0E1512;
+    --d-surface: #16201B;
+    --d-surface-2: #1C2924;
+    --d-border: #2B3A33;
+    --d-text: #E4EEE8;
+    --d-muted: #93A69C;
+    --d-accent: #5FD39A;          /* green used for text/icons on dark */
+
+    /* student */
+    --bg: var(--d-bg);
+    --white: var(--d-surface);
+    --line: var(--d-border);
+    --text: var(--d-text);
+    --muted: var(--d-muted);
+    --ink: #E4EEE8;
+    --green: #2E9B68;
+
+    --free-bg: #12362A;  --free-line: #25664A;  --free-text: #6FDDA5;
+    --part-bg: #3A2E12;  --part-line: #7A5B1E;  --part-text: #F0C676;
+    --full-bg: #3A1D1F;  --full-line: #7A3A3C;  --full-text: #F29A9A;
+    --past-bg: #1C2420;  --past-text: #6F8179;
+
+    /* admin */
+    --light: #1B3A2C;
+    --border: var(--d-border);
+
+    /* instructor */
+    --background: var(--d-bg);
+    --primary-light: #1B3A2C;
+    --shadow: 0 3px 12px rgba(0, 0, 0, .35);
+}
+
+html[data-theme="dark"] body {
+    background: var(--d-bg);
+    color: var(--d-text);
+}
+
+html[data-theme="dark"] :focus-visible { outline-color: #3FAE7B; }
+html[data-theme="dark"] ::placeholder { color: #6F8179; opacity: 1; }
+html[data-theme="dark"] ::selection { background: #2E9B6866; }
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea { color: var(--d-text); }
+html[data-theme="dark"] option { background: #16201B; color: var(--d-text); }
+
+/* ---------------------------------------------------------
+   STUDENT PORTAL
+--------------------------------------------------------- */
+html[data-theme="dark"] .s-header { background: #0B1511; border-bottom: 1px solid var(--d-border); }
+html[data-theme="dark"] .s-logo { background: #17382B; }
+html[data-theme="dark"] .s-brand strong { color: #fff; }
+html[data-theme="dark"] .s-intro h1,
+html[data-theme="dark"] .s-cal-head h2,
+html[data-theme="dark"] .s-day h2,
+html[data-theme="dark"] .s-booked h3 { color: var(--d-text); }
+
+html[data-theme="dark"] .s-field select,
+html[data-theme="dark"] .s-roominfo,
+html[data-theme="dark"] .s-calendar,
+html[data-theme="dark"] .s-day,
+html[data-theme="dark"] .s-nav,
+html[data-theme="dark"] .s-today,
+html[data-theme="dark"] .s-legend li { background: var(--d-surface); }
+
+html[data-theme="dark"] .s-roominfo img { background: #223029; }
+html[data-theme="dark"] .s-nav { color: var(--d-accent); }
+html[data-theme="dark"] .s-nav:hover { background: #1F3329; }
+html[data-theme="dark"] .s-today { color: var(--d-accent); border-color: #2E9B68; }
+html[data-theme="dark"] .s-today:hover { background: #2E9B68; color: #fff; }
+
+html[data-theme="dark"] .s-notice { background: #3A2E12; border-color: #7A5B1E; color: #F0D9A5; }
+
+html[data-theme="dark"] .s-day-cell:hover { box-shadow: 0 3px 12px rgba(0, 0, 0, .5); }
+html[data-theme="dark"] .s-day-cell.today { box-shadow: 0 0 0 2px #E4EEE8; }
+html[data-theme="dark"] .s-day-cell.selected {
+    background: #2E9B68;
+    border-color: #2E9B68;
+    color: #06150E;
+}
+html[data-theme="dark"] .s-fill { background: rgba(0, 0, 0, .35); }
+html[data-theme="dark"] .s-day-cell.selected .s-fill { background: rgba(0, 0, 0, .25); }
+html[data-theme="dark"] .s-day-cell.selected .s-fill b { background: #06150E; }
+
+html[data-theme="dark"] .dot.past { border-color: #3A4A43; }
+html[data-theme="dark"] .dot.free { border-color: #3FAE7B; }
+html[data-theme="dark"] .dot.part { border-color: #C28C2C; }
+html[data-theme="dark"] .dot.full { border-color: #C45858; }
+html[data-theme="dark"] .dot.today { background: var(--d-surface); border-color: #E4EEE8; }
+
+html[data-theme="dark"] .s-slot.passed { border-color: #2B3A33; }
+html[data-theme="dark"] .s-booked li { background: #2A1A1C; border-color: #5E3032; }
+html[data-theme="dark"] .s-who small + small { color: #D9A0A0; }
+html[data-theme="dark"] .s-slot.reserved.done { background: #1A2B23; border-color: #2F4A3D; color: #9CC4AE; }
+html[data-theme="dark"] .s-booked li.done { background: #172720; border-color: #2F4A3D; }
+html[data-theme="dark"] .s-booked li.done .s-when { color: #9CC4AE; }
+html[data-theme="dark"] .s-booked li.done .s-who small + small { color: var(--d-muted); }
+html[data-theme="dark"] .s-done,
+html[data-theme="dark"] .s-slot.done .s-state { color: #6FDDA5; }
+
+/* ---------------------------------------------------------
+   ADMIN PORTAL
+--------------------------------------------------------- */
+html[data-theme="dark"] .login-card,
+html[data-theme="dark"] .admin-modal-content,
+html[data-theme="dark"] .admin-topbar,
+html[data-theme="dark"] .admin-stat,
+html[data-theme="dark"] .admin-table-card,
+html[data-theme="dark"] .admin-room-card,
+html[data-theme="dark"] .admin-notification,
+html[data-theme="dark"] .fb-card { background: var(--d-surface); }
+
+html[data-theme="dark"] .login-card { box-shadow: 0 20px 50px rgba(0, 0, 0, .55); }
+html[data-theme="dark"] .login-card h1 { color: var(--d-text); }
+html[data-theme="dark"] .admin-auth { background: linear-gradient(140deg, #07100C, #14513A); }
+
+html[data-theme="dark"] .login-card input,
+html[data-theme="dark"] .admin-modal-content input,
+html[data-theme="dark"] .admin-modal-content select,
+html[data-theme="dark"] .admin-modal-content textarea,
+html[data-theme="dark"] .admin-search,
+html[data-theme="dark"] .admin-filters input,
+html[data-theme="dark"] .admin-filters select,
+html[data-theme="dark"] .fb-card textarea { background: #101914; border-color: var(--d-border); }
+
+html[data-theme="dark"] .admin-sidebar { background: #0B1511; border-right: 1px solid var(--d-border); }
+html[data-theme="dark"] .admin-toast { background: #1C2924; border: 1px solid var(--d-border); }
+html[data-theme="dark"] .admin-modal { background: rgba(0, 0, 0, .7); }
+
+html[data-theme="dark"] .admin-outline,
+html[data-theme="dark"] .small-btn,
+html[data-theme="dark"] .notif-tab { background: var(--d-surface-2); border-color: var(--d-border); }
+html[data-theme="dark"] .admin-outline,
+html[data-theme="dark"] .small-btn { color: var(--d-accent); }
+html[data-theme="dark"] .small-btn.danger { color: #F28585; }
+html[data-theme="dark"] .notif-tab.active { background: #2E9B68; border-color: #2E9B68; color: #fff; }
+
+html[data-theme="dark"] .admin-avatar,
+html[data-theme="dark"] .admin-logo,
+html[data-theme="dark"] .admin-chip { background-color: #1B3A2C; color: var(--d-accent); }
+html[data-theme="dark"] .admin-stat > i,
+html[data-theme="dark"] .admin-notification i { color: var(--d-accent); }
+html[data-theme="dark"] .admin-stat { box-shadow: 0 3px 12px rgba(0, 0, 0, .3); }
+
+html[data-theme="dark"] .admin-welcome { background: linear-gradient(110deg, #0F2E22, #1B6B47); }
+
+html[data-theme="dark"] th,
+html[data-theme="dark"] .dept-row td { background: #1C2A23; color: #A9C4B6; }
+html[data-theme="dark"] tr.group-row td { background: #1A2B23; border-top-color: #2F4A3D; color: var(--d-text); }
+html[data-theme="dark"] tbody tr:hover { background: #1B2823; }
+html[data-theme="dark"] .admin-room-card img { background: #223029; }
+html[data-theme="dark"] .usage-bar { background: #26352E; }
+
+html[data-theme="dark"] .admin-notification.unread,
+html[data-theme="dark"] .fb-card.unread {
+    background: #15332A;
+    border-color: #25664A;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .3);
+}
+
+html[data-theme="dark"] .danger-outline { color: #F28585; border-color: #6B3335; }
+
+/* status pills (admin + instructor) */
+html[data-theme="dark"] .status-active,
+html[data-theme="dark"] .status-confirmed,
+html[data-theme="dark"] .fb-status.resolved { color: #6FDDA5; background: #12362A; }
+html[data-theme="dark"] .status-inactive,
+html[data-theme="dark"] .status-cancelled { color: #F29A9A; background: #3A1D1F; }
+html[data-theme="dark"] .status-completed,
+html[data-theme="dark"] .history-count { color: #B6C2CC; background: #26313A; }
+html[data-theme="dark"] .status-pending,
+html[data-theme="dark"] .fb-status.reviewed { color: #F0C676; background: #3A2E12; }
+html[data-theme="dark"] .fb-status.new,
+html[data-theme="dark"] .status-new { color: #8DB8F5; background: #1B2B45; }
+
+/* ---------------------------------------------------------
+   INSTRUCTOR PORTAL
+--------------------------------------------------------- */
+html[data-theme="dark"] .auth-screen,
+html[data-theme="dark"] .auth-content { background: var(--d-bg); }
+html[data-theme="dark"] .auth-box h2,
+html[data-theme="dark"] .form-section-title { color: var(--d-text); }
+html[data-theme="dark"] .auth-box input { background: #101914; }
+
+html[data-theme="dark"] .topbar,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .room-card,
+html[data-theme="dark"] .table-card,
+html[data-theme="dark"] .form-card,
+html[data-theme="dark"] .calendar-card,
+html[data-theme="dark"] .notification-item,
+html[data-theme="dark"] .modal-content,
+html[data-theme="dark"] .modal-close,
+html[data-theme="dark"] .empty-state,
+html[data-theme="dark"] .footer,
+html[data-theme="dark"] .date-picker,
+html[data-theme="dark"] .schedule-preview,
+html[data-theme="dark"] .feedback-card { background: var(--d-surface); }
+
+html[data-theme="dark"] .sidebar { background: #0B1511; border-right: 1px solid var(--d-border); }
+html[data-theme="dark"] .toast { background: #1C2924; border: 1px solid var(--d-border); }
+html[data-theme="dark"] .toast.success { background: #14573B; border-color: #1F7A54; }
+html[data-theme="dark"] .toast.error { background: #6B2326; border-color: #8E3236; }
+html[data-theme="dark"] .modal { background: rgba(0, 0, 0, .7); }
+html[data-theme="dark"] .empty-state { border-color: #2F4A3D; }
+html[data-theme="dark"] .breadcrumb strong { color: var(--d-text); }
+
+html[data-theme="dark"] .filter-bar input,
+html[data-theme="dark"] .filter-bar select,
+html[data-theme="dark"] .calendar-controls select,
+html[data-theme="dark"] .calendar-controls input,
+html[data-theme="dark"] .form-group input,
+html[data-theme="dark"] .form-group select,
+html[data-theme="dark"] .form-group textarea,
+html[data-theme="dark"] .schedule-preview td input[type="time"] { background: #101914; border-color: var(--d-border); color: var(--d-text); }
+html[data-theme="dark"] .form-group input:read-only { background: #17211C; color: var(--d-muted); }
+
+html[data-theme="dark"] .btn-outline,
+html[data-theme="dark"] .btn-light,
+html[data-theme="dark"] .small-btn,
+html[data-theme="dark"] .photo-upload-btn,
+html[data-theme="dark"] .view-tab,
+html[data-theme="dark"] .dp-head button,
+html[data-theme="dark"] .action-btn { background: var(--d-surface-2); border-color: var(--d-border); }
+html[data-theme="dark"] .btn-outline,
+html[data-theme="dark"] .btn-light,
+html[data-theme="dark"] .photo-upload-btn,
+html[data-theme="dark"] .dp-head button { color: var(--d-accent); }
+html[data-theme="dark"] .btn-outline:hover,
+html[data-theme="dark"] .btn-light:hover,
+html[data-theme="dark"] .photo-upload-btn:hover,
+html[data-theme="dark"] .small-btn:hover,
+html[data-theme="dark"] .dp-head button:hover { background: #24382F; }
+html[data-theme="dark"] .action-btn { color: #F28585; border-color: #8E3236; }
+html[data-theme="dark"] .action-btn:hover { background: #C73737; color: #fff; }
+html[data-theme="dark"] .action-btn.neutral { color: var(--d-accent); border-color: #2E9B68; background: transparent; }
+html[data-theme="dark"] .action-btn.neutral:hover { background: #2E9B68; color: #fff; }
+html[data-theme="dark"] .view-tab.active { background: #2E9B68; border-color: #2E9B68; color: #fff; }
+html[data-theme="dark"] .btn-primary { background: #1F8A5B; }
+html[data-theme="dark"] .btn-primary:hover { background: #2AA06C; }
+html[data-theme="dark"] .text-btn,
+html[data-theme="dark"] .mobile-brand,
+html[data-theme="dark"] .form-section-title i,
+html[data-theme="dark"] .room-card .room-status { color: var(--d-accent); }
+html[data-theme="dark"] .icon-btn:hover { background: #24382F; color: var(--d-accent); }
+
+html[data-theme="dark"] .avatar,
+html[data-theme="dark"] .profile-avatar,
+html[data-theme="dark"] .notification-icon { background-color: #1B3A2C; color: var(--d-accent); }
+/* keep uploaded photos exactly as they are */
+html[data-theme="dark"] .avatar.has-photo,
+html[data-theme="dark"] .profile-avatar.has-photo,
+html[data-theme="dark"] .admin-avatar.has-photo { color: transparent; }
+html[data-theme="dark"] .facility-tag,
+html[data-theme="dark"] .notif-chip,
+html[data-theme="dark"] .sp-summary { background: #1B3A2C; color: #9CE2B7; }
+html[data-theme="dark"] .sp-end { color: #9CE2B7; }
+html[data-theme="dark"] .sp-remove:hover,
+html[data-theme="dark"] .small-btn.danger:hover { background: #3A1D1F; }
+
+html[data-theme="dark"] .stat-icon.blue   { color: #5FD39A; background: #16352A; }
+html[data-theme="dark"] .stat-icon.green  { color: #4FD69B; background: #123A2A; }
+html[data-theme="dark"] .stat-icon.orange { color: #F2B45E; background: #3A2E12; }
+html[data-theme="dark"] .stat-icon.purple { color: #B79AF0; background: #2A2142; }
+
+html[data-theme="dark"] .room-card:hover { box-shadow: 0 7px 20px rgba(0, 0, 0, .5); }
+html[data-theme="dark"] .room-card img { background: #223029; }
+
+html[data-theme="dark"] thead,
+html[data-theme="dark"] .schedule-preview th { background: #1C2A23; }
+html[data-theme="dark"] th { color: #A9C4B6; }
+html[data-theme="dark"] .availability-notice { background: #15332A; color: #6FDDA5; }
+
+/* booking calendar slots */
+html[data-theme="dark"] .time-slot { background: #12362A; border-color: #25664A; color: #6FDDA5; }
+html[data-theme="dark"] .time-slot:hover:not(:disabled) { background: #1B4A37; border-color: #3FAE7B; color: #9CE2B7; }
+html[data-theme="dark"] .time-slot.booked,
+html[data-theme="dark"] .time-slot.booked:hover { background: #3A1D1F; border-color: #7A3A3C; color: #F29A9A; }
+html[data-theme="dark"] .time-slot.selected { background: #1F8A5B; border-color: #3FAE7B; color: #fff; }
+html[data-theme="dark"] .time-slot.done,
+html[data-theme="dark"] .time-slot.done:hover { background: #1C2420; border-color: #2B3A33; color: #6F8179; }
+
+html[data-theme="dark"] .dp-day { color: var(--d-text); }
+html[data-theme="dark"] .dp-day:hover:not(:disabled) { background: #24382F; }
+html[data-theme="dark"] .dp-day:disabled { color: #4A5C53; }
+html[data-theme="dark"] .dp-day.selected { background: #1F8A5B; color: #fff; }
+
+html[data-theme="dark"] .notification-item.unread {
+    background: #15332A;
+    border-color: #25664A;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .3);
+}
+html[data-theme="dark"] .notification-item.unread p { color: var(--d-text); }
+html[data-theme="dark"] .feedback-reply { background: #12362A; border-left-color: #3FAE7B; }
+
+/* ---------------------------------------------------------
+   Scrollbars
+--------------------------------------------------------- */
+html[data-theme="dark"] * { scrollbar-color: #33463D #0E1512; }
+
+`;
+        (document.head || document.documentElement).appendChild(darkStyle);
+    }
+
+    function saved() {
+        try { return localStorage.getItem(KEY); } catch (e) { return null; }
+    }
+
+    function systemTheme() {
+        return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+
+    function apply(theme) {
+        root.setAttribute("data-theme", theme);
+
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (!meta) {
+            meta = document.createElement("meta");
+            meta.name = "theme-color";
+            document.head.appendChild(meta);
+        }
+        meta.content = theme === "dark" ? "#0B1511" : "#123D2C";
+
+        document.querySelectorAll(".theme-toggle").forEach(function (b) {
+            var label = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+            b.setAttribute("aria-label", label);
+            b.title = label;
+            b.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+        });
+    }
+
+    // 1) before first paint
+    apply(saved() || systemTheme());
+
+    // 2) follow the device while the user has not chosen manually
+    if (window.matchMedia) {
+        var mq = matchMedia("(prefers-color-scheme: dark)");
+        var onChange = function () { if (!saved()) apply(systemTheme()); };
+        if (mq.addEventListener) mq.addEventListener("change", onChange);
+        else if (mq.addListener) mq.addListener(onChange);
+    }
+
+    // 3) keep several open tabs of THIS portal in step
+    window.addEventListener("storage", function (e) {
+        if (e.key === KEY && e.newValue) apply(e.newValue);
+    });
+
+    var ICONS =
+        '<svg class="i-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>' +
+        '<svg class="i-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+
+    function makeButton(cls) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "theme-toggle " + cls;
+        b.innerHTML = ICONS;
+        b.addEventListener("click", function () {
+            var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+            try { localStorage.setItem(KEY, next); } catch (e) {}
+            apply(next);
+        });
+        return b;
+    }
+
+    function init() {
+        // Student page: toggle next to "Refresh"
+        var refresh = document.getElementById("refreshBtn");
+        if (refresh && refresh.parentNode.classList.contains("s-header")) {
+            var wrap = document.createElement("div");
+            wrap.className = "s-actions";
+            refresh.parentNode.insertBefore(wrap, refresh);
+            wrap.appendChild(makeButton("s-refresh s-theme"));
+            wrap.appendChild(refresh);
+        }
+
+        // Instructor portal: inside the top bar actions
+        var actions = document.querySelector(".topbar-actions");
+        if (actions) actions.insertBefore(makeButton("icon-btn"), actions.firstChild);
+
+        // Admin portal: inside the top bar, before the user name
+        var adminUser = document.querySelector(".admin-user");
+        if (adminUser) adminUser.insertBefore(makeButton("admin-icon"), adminUser.firstChild);
+
+
+        apply(root.getAttribute("data-theme"));
+    }
+
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+})();
+
+
 /************************************************************
  CLASSROOMRESERVE - INSTRUCTOR FRONTEND
 ************************************************************/
