@@ -1070,7 +1070,6 @@ $("page-history").addEventListener("click", async e => {
         if (purge) {
             const id = purge.dataset.hPurge;
             const r = reservations.find(x => x.ReservationID === id);
-            if (!confirm("Permanently delete this reservation from your history? The administrator's records are not affected.")) return;
             await setResView([id], "Deleted");
             toast("Reservation permanently deleted from your history.");
             if (r) addLocalNotif("Reservation permanently deleted", `You permanently deleted the reservation for ${describeRes(r)} from your history.`, {
