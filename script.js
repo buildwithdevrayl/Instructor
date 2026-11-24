@@ -1025,7 +1025,11 @@ function describeRes(r) {
 
 /* Saved on the server (Reservations sheet), so every device shows the same history */
 async function setResView(ids, view) {
-    await apiPost("setReservationView", {reservationIDs: ids, view});
+    const result = await apiPost("setReservationView", {reservationIDs: ids, view});
+    if ((result.count || 0) < ids.length) {
+        await loadAll({silent: true});   // show what the server really has
+        throw new Error("The change could not be saved on the server. Please try again.");
+    }
     reservations.forEach(r => { if (ids.includes(r.ReservationID)) r.InstructorView = view; });
     if (view === "Deleted") reservations = reservations.filter(r => !ids.includes(r.ReservationID));
     renderHistory();
