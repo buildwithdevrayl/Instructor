@@ -25,7 +25,7 @@ const HEADERS = {
     "ReservationID", "InstructorID", "InstructorName",
     "RoomID", "RoomName", "Date", "StartTime", "EndTime",
     "Students", "Subject", "Purpose", "Notes", "Status",
-    "CancellationReason", "CreatedAt", "CancelledAt"
+    "CancellationReason", "CreatedAt", "CancelledAt", "InstructorView"
   ],
   Notifications: [
     "NotificationID", "Recipient", "Title", "Message",
@@ -319,6 +319,10 @@ function doPost(e) {
 
       case "cancelReservation":
         result = cancelReservation_(data);
+        break;
+
+      case "setReservationView":
+        result = setReservationView_(data);
         break;
 
       case "updateProfile":
@@ -1537,10 +1541,58 @@ function cancelReservation_(d) {
   return {message:"Reservation cancelled. Admin has been notified."};
 }
 
+/* Instructor's own view of finished/cancelled reservations, saved in the sheet
+   so it is the same on every device.
+   view: "" (normal) | "Archived" | "Trash" | "Deleted" (hidden for good).
+   The row stays in the sheet for admin records and reports. */
+function setReservationView_(d) {
+  const session = getSession_(d.token, "Instructor");
+  const view = String(d.view || "");
+
+  if (["", "Archived", "Trash", "Deleted"].indexOf(view) < 0) throw new Error("Invalid view.");
+
+  const ids = [].concat(d.reservationIDs || []).map(String);
+  if (!ids.length) throw new Error("Nothing selected.");
+
+  const sheet = getDB().getSheetByName("Reservations");
+  const headers = ensureColumns_(sheet, ["InstructorView"]);
+
+  const today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "yyyy-MM-dd");
+  const nowMin = toMinutes_(Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "HH:mm"));
+
+  // only the instructor's own cancelled or already-finished reservations
+  const ok = {};
+  getRows("Reservations").forEach(r => {
+    if (ids.indexOf(String(r.ReservationID)) < 0 || r.InstructorID !== session.id) return;
+    const over = r.Status === "Confirmed" &&
+      (r.Date < today || (r.Date === today && toMinutes_(r.EndTime) <= nowMin));
+    if (r.Status === "Cancelled" || over) ok[String(r.ReservationID)] = true;
+  });
+
+  const idCol = headers.indexOf("ReservationID") + 1;
+  const viewCol = headers.indexOf("InstructorView") + 1;
+  const last = sheet.getLastRow();
+  let count = 0;
+
+  if (last >= 2) {
+    sheet.getRange(2, idCol, last - 1, 1).getValues().forEach((row, i) => {
+      if (ok[String(row[0])]) {
+        sheet.getRange(i + 2, viewCol).setValue(view);
+        count++;
+      }
+    });
+  }
+
+  clearRowsMemo_();
+  return {message: count + " reservation(s) updated.", count: count};
+}
+
+/* Instructors do not see reservations they permanently deleted from their
+   history ("Deleted"). Admins always see everything. */
 function getReservations_(session) {
   return getRows("Reservations")
     .filter(r => session.role === "Admin" ||
-                 r.InstructorID === session.id)
+                 (r.InstructorID === session.id && r.InstructorView !== "Deleted"))
     .sort((a,b) => String(b.CreatedAt).localeCompare(String(a.CreatedAt)));
 }
 
