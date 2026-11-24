@@ -15,7 +15,7 @@ const HEADERS = {
   Instructors: [
     "InstructorID", "FullName", "EmployeeID", "Department",
     "Email", "Contact", "PasswordHash", "Salt", "Status",
-    "CreatedAt", "PhotoURL"
+    "CreatedAt", "PhotoURL", "EmailReminders"
   ],
   Rooms: [
     "RoomID", "RoomName", "Building", "Floor", "Capacity",
@@ -25,7 +25,7 @@ const HEADERS = {
     "ReservationID", "InstructorID", "InstructorName",
     "RoomID", "RoomName", "Date", "StartTime", "EndTime",
     "Students", "Subject", "Purpose", "Notes", "Status",
-    "CancellationReason", "CreatedAt", "CancelledAt", "InstructorView", "AdminView"
+    "CancellationReason", "CreatedAt", "CancelledAt", "InstructorView", "AdminView", "ReminderSent"
   ],
   Notifications: [
     "NotificationID", "Recipient", "Title", "Message",
@@ -834,6 +834,7 @@ function login_(d) {
       department:user.Department || "",
       contact:user.Contact || "",
       photoURL:user.PhotoURL || "",
+      emailReminders:user.EmailReminders !== "No",
       role:role
     }
   };
@@ -1898,6 +1899,182 @@ function adminUpdateReservation_(d) {
   return {message:"Reservation updated."};
 }
 
+/* ---------------- EMAIL REMINDERS (15 minutes before a class) ----------------
+   sendReminders() is run by a time-driven trigger every minute.
+   Run setupReminderTrigger() ONCE from the Apps Script editor to create it.
+   Each reservation is reminded only once (ReminderSent column). Instructors can
+   switch the reminder off in My Profile (EmailReminders = "No"). */
+
+const REMINDER_MINUTES = 15;
+
+function setupReminderTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === "sendReminders") ScriptApp.deleteTrigger(t);
+  });
+
+  ScriptApp.newTrigger("sendReminders").timeBased().everyMinutes(1).create();
+  MailApp.getRemainingDailyQuota();   // makes sure the e-mail permission is granted
+
+  return "Reminder trigger created. Reminders are sent " + REMINDER_MINUTES + " minutes before each class.";
+}
+
+function stopReminderTrigger() {
+  let n = 0;
+
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === "sendReminders") { ScriptApp.deleteTrigger(t); n++; }
+  });
+
+  return "Removed " + n + " reminder trigger(s).";
+}
+
+function fmtClock_(hhmm) {
+  const h = Number(String(hhmm).slice(0, 2));
+  const m = String(hhmm).slice(3, 5);
+  return ((h % 12) || 12) + ":" + m + (h >= 12 ? " PM" : " AM");
+}
+
+function reminderEmailHtml_(name, r) {
+  const esc = s => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                                  .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  const row = (label, value) =>
+    '<tr><td style="padding:6px 0;color:#6B7C73;font-size:13px;width:90px;">' + label + '</td>' +
+    '<td style="padding:6px 0;color:#1D3329;font-size:14px;font-weight:600;">' + esc(value) + '</td></tr>';
+
+  return '' +
+  '<div style="margin:0;padding:0;background:#F5F7F6;">' +
+  '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5F7F6;padding:28px 12px;">' +
+    '<tr><td align="center">' +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" ' +
+        'style="max-width:480px;background:#FFFFFF;border-radius:16px;overflow:hidden;' +
+        'border:1px solid #E1E9E3;font-family:Segoe UI,Arial,sans-serif;">' +
+        '<tr><td style="background:#123D2C;padding:24px;text-align:center;">' +
+          '<div style="color:#FFFFFF;font-size:20px;font-weight:700;">Classroom Reservation</div>' +
+          '<div style="color:#B6CEBF;font-size:13px;margin-top:2px;">Class reminder</div>' +
+        '</td></tr>' +
+        '<tr><td style="padding:26px 24px 6px;color:#1D3329;font-size:15px;line-height:1.6;">' +
+          '<p style="margin:0 0 8px;font-size:17px;font-weight:700;color:#123D2C;">Hello, ' + esc(name) + '!</p>' +
+          '<p style="margin:0;">Your reserved classroom starts in about <strong>' + REMINDER_MINUTES + ' minutes</strong>.</p>' +
+        '</td></tr>' +
+        '<tr><td style="padding:12px 24px 24px;">' +
+          '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E6F6EC;border:1px solid #A9DFC0;border-radius:12px;padding:10px 16px;">' +
+            row("Classroom", r.RoomName) +
+            row("Date", r.prettyDate) +
+            row("Time", fmtClock_(r.StartTime) + " - " + fmtClock_(r.EndTime)) +
+            (r.Subject ? row("Subject", r.Subject) : "") +
+          '</table>' +
+        '</td></tr>' +
+        '<tr><td style="padding:0 24px 24px;color:#6B7C73;font-size:12px;line-height:1.6;">' +
+          'You can turn these reminders off anytime in My Profile.' +
+        '</td></tr>' +
+      '</table>' +
+    '</td></tr>' +
+  '</table></div>';
+}
+
+function sendReminders() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return;
+
+  try {
+    const now = new Date();
+    const today = Utilities.formatDate(now, CONFIG.TIMEZONE, "yyyy-MM-dd");
+    const nowMin = toMinutes_(Utilities.formatDate(now, CONFIG.TIMEZONE, "HH:mm"));
+
+    // reservations starting within the next 15 minutes that were not reminded yet
+    const due = getRows("Reservations").filter(r => {
+      if (r.Status !== "Confirmed" || r.Date !== today || r.ReminderSent) return false;
+      const left = toMinutes_(r.StartTime) - nowMin;
+      return left > 0 && left <= REMINDER_MINUTES;
+    });
+
+    if (!due.length) return;   // nothing to do: the spreadsheet is not even opened
+
+    const instructors = {};
+    getRows("Instructors").forEach(i => instructors[i.InstructorID] = i);
+
+    let quota = MailApp.getRemainingDailyQuota();
+    const done = {};
+    const stamp = Utilities.formatDate(now, CONFIG.TIMEZONE, "yyyy-MM-dd HH:mm");
+
+    due.forEach(r => {
+      const who = instructors[r.InstructorID];
+
+      // account gone, inactive, no e-mail or reminders switched off: never remind
+      if (!who || who.Status !== "Active" || !who.Email || who.EmailReminders === "No") {
+        done[String(r.ReservationID)] = "skipped";
+        return;
+      }
+
+      if (quota <= 0) return;   // out of daily e-mails: try again later
+
+      const parts = String(r.Date).split("-");
+      const pretty = Utilities.formatDate(
+        new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])),
+        CONFIG.TIMEZONE, "EEEE, MMM d, yyyy");
+
+      const info = Object.assign({}, r, {prettyDate: pretty});
+      const when = fmtClock_(r.StartTime);
+
+      try {
+        MailApp.sendEmail({
+          to: who.Email,
+          name: "Admin",
+          subject: "Reminder: " + r.RoomName + " at " + when + " (in " + REMINDER_MINUTES + " minutes)",
+          body: "Hello " + who.FullName + ",\n\n" +
+                "Your reserved classroom starts in about " + REMINDER_MINUTES + " minutes.\n\n" +
+                "Classroom: " + r.RoomName + "\n" +
+                "Date: " + pretty + "\n" +
+                "Time: " + fmtClock_(r.StartTime) + " - " + fmtClock_(r.EndTime) + "\n" +
+                (r.Subject ? "Subject: " + r.Subject + "\n" : "") +
+                "\nAdmin - Classroom Reservation",
+          htmlBody: reminderEmailHtml_(who.FullName, info)
+        });
+
+        quota--;
+        done[String(r.ReservationID)] = stamp;
+
+        notify_(
+          r.InstructorID,
+          "Class reminder",
+          r.RoomName + " starts at " + when + " (in about " + REMINDER_MINUTES + " minutes).",
+          "reminder",
+          {room: r.RoomName, date: r.Date, time: r.StartTime + "-" + r.EndTime}
+        );
+      } catch (err) {
+        // leave it unmarked so the next run tries again (e.g. temporary mail error)
+      }
+    });
+
+    const ids = Object.keys(done);
+    if (!ids.length) return;
+
+    // mark everything in ONE write so nobody is reminded twice
+    const sheet = getDB().getSheetByName("Reservations");
+    const headers = ensureColumns_(sheet, ["ReminderSent"]);
+    const idCol = headers.indexOf("ReservationID") + 1;
+    const markCol = headers.indexOf("ReminderSent") + 1;
+    const last = sheet.getLastRow();
+
+    if (last >= 2) {
+      const idValues = sheet.getRange(2, idCol, last - 1, 1).getValues();
+      const markRange = sheet.getRange(2, markCol, last - 1, 1);
+      const marks = markRange.getValues();
+
+      idValues.forEach((row, i) => {
+        if (done[String(row[0])]) marks[i][0] = done[String(row[0])];
+      });
+
+      markRange.setValues(marks);
+    }
+
+    clearRowsMemo_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /* ---------------- INSTRUCTOR PROFILE ---------------- */
 
 function updateProfile_(d) {
@@ -1921,6 +2098,11 @@ function updateProfile_(d) {
     Email:normalizeEmail(p.email),
     Contact:p.contact || ""
   };
+
+  if (p.emailReminders !== undefined) {
+    ensureColumns_(getDB().getSheetByName("Instructors"), ["EmailReminders"]);
+    updates.EmailReminders = (p.emailReminders === false || p.emailReminders === "false") ? "No" : "Yes";
+  }
 
   if (p.photoData) {
     ensureColumns_(getDB().getSheetByName("Instructors"), ["PhotoURL"]);
@@ -1948,6 +2130,7 @@ function updateProfile_(d) {
       department:u.Department || "",
       contact:u.Contact || "",
       photoURL:u.PhotoURL || "",
+      emailReminders:u.EmailReminders !== "No",
       role:"Instructor"
     }
   };
