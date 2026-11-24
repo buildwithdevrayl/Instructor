@@ -645,6 +645,18 @@ async function getBookedFor(roomId, date) {
         });
 }
 
+/* The instructor's OWN active reservations on a date, in ANY classroom.
+   An instructor cannot be in two classrooms at the same time, so these
+   block new bookings even when a different room is chosen. */
+function getMyBookedOn(date) {
+    return reservations.filter(r =>
+        r.Date === date &&
+        String(r.Status || "").toLowerCase() !== "cancelled" &&
+        r.InstructorView !== "Deleted" &&
+        r.StartTime && r.EndTime
+    );
+}
+
 /* Short, readable reservation ID for display (the full ID is still used internally) */
 function shortID(id) {
     // Show the exact Reservation ID saved in the database
@@ -1706,7 +1718,19 @@ async function validateReservation(res) {
         }
     }
 
-    // Fresh schedule from the server for this room and date
+    // The instructor cannot be in two classrooms at the same time:
+    // check their OWN reservations on this date in EVERY room.
+    const myConflicts = getMyBookedOn(res.date)
+        .filter(r => res.startTime < r.EndTime && res.endTime > r.StartTime);
+
+    if (myConflicts.length) {
+        const list = myConflicts
+            .map(r => `${r.RoomName || "another classroom"} (${formatTime(r.StartTime)} - ${formatTime(r.EndTime)})`)
+            .join(", ");
+        return `You already have a reservation on ${dateText(res.date)} at that time: ${list}. You cannot book two classrooms at the same time. Please choose a different time.`;
+    }
+
+    // Fresh schedule from the server for this room and date (everyone's bookings)
     const conflicts = (await getBookedFor(res.roomId, res.date))
         .filter(r => res.startTime < r.EndTime && res.endTime > r.StartTime);
 
@@ -1749,6 +1773,10 @@ $("reservationForm").addEventListener("submit", async e => {
             purpose:$("reservePurpose").value,
             notes:$("reserveNotes").value
         };
+
+        // Make sure the instructor's own reservation list is up to date
+        // (e.g. a booking made on another device) before checking for overlaps
+        await loadAll({silent: true, force: true});
 
         // Check every selected day before anything is saved
         const problems = await Promise.all(sessions.map(s =>
