@@ -25,7 +25,7 @@ const HEADERS = {
     "ReservationID", "InstructorID", "InstructorName",
     "RoomID", "RoomName", "Date", "StartTime", "EndTime",
     "Students", "Subject", "Purpose", "Notes", "Status",
-    "CancellationReason", "CreatedAt", "CancelledAt", "InstructorView"
+    "CancellationReason", "CreatedAt", "CancelledAt", "InstructorView", "AdminView"
   ],
   Notifications: [
     "NotificationID", "Recipient", "Title", "Message",
@@ -51,7 +51,52 @@ let _dbMemo_ = null;
 let _rowsMemo_ = {};
 let _fmtMemo_ = {};
 
-function clearRowsMemo_() { _rowsMemo_ = {}; }
+let _verMemo_ = {};
+
+/* Every write calls this, so the shared (cross-request) sheet cache is
+   invalidated immediately and nobody ever reads stale rows. */
+function clearRowsMemo_() {
+  _rowsMemo_ = {};
+  bumpVer_("db");
+}
+
+/* Cross-request cache for values bigger than 100 KB (split into chunks). */
+function cacheGetBig_(key) {
+  const cache = CacheService.getScriptCache();
+  const n = Number(cache.get(key + ":n") || 0);
+
+  if (!n) return null;
+
+  const keys = [];
+  for (let i = 0; i < n; i++) keys.push(key + ":" + i);
+
+  const parts = cache.getAll(keys);
+  let text = "";
+
+  for (let i = 0; i < n; i++) {
+    const p = parts[keys[i]];
+    if (p === undefined || p === null) return null;
+    text += p;
+  }
+
+  try { return JSON.parse(text); } catch (err) { return null; }
+}
+
+function cachePutBig_(key, value, ttl) {
+  try {
+    const text = JSON.stringify(value);
+    const size = 30000;                       // safe for multi-byte text (100 KB limit)
+    const n = Math.ceil(text.length / size);
+
+    if (n > 30) return;                       // too big: skip caching
+
+    const all = {};
+    for (let i = 0; i < n; i++) all[key + ":" + i] = text.slice(i * size, (i + 1) * size);
+    all[key + ":n"] = String(Math.max(n, 1));
+
+    CacheService.getScriptCache().putAll(all, ttl);
+  } catch (err) {}
+}
 
 function getDB() {
   if (_dbMemo_) return _dbMemo_;
@@ -67,20 +112,43 @@ function getDB() {
 
 /* Cross-request cache. The key carries a version number that is bumped on
    every write, so users never see stale rooms or calendars. */
+function newVer_() {
+  return String(Date.now()) + Math.random().toString(36).slice(2, 6);
+}
+
 function getVer_(name) {
+  if (_verMemo_[name]) return _verMemo_[name];
+
   const cache = CacheService.getScriptCache();
   let v = cache.get("ver_" + name);
 
   if (!v) {
-    v = String(Date.now());
+    v = newVer_();
     cache.put("ver_" + name, v, 21600);
   }
 
+  _verMemo_[name] = v;
   return v;
 }
 
 function bumpVer_(name) {
-  CacheService.getScriptCache().put("ver_" + name, String(Date.now()), 21600);
+  const v = newVer_();
+  _verMemo_[name] = v;
+  CacheService.getScriptCache().put("ver_" + name, v, 21600);
+}
+
+/* Runs when someone edits the Google Sheet BY HAND, so manual changes show up
+   in the portals immediately (script writes already refresh the cache). */
+function onEdit() {
+  try { bumpVer_("db"); bumpVer_("res"); bumpVer_("rooms"); } catch (err) {}
+}
+
+/* Short fingerprint of the data. The portals send it back so the server can
+   answer "unchanged" instead of re-sending everything. It also changes every
+   2 minutes and every day, so time-based screens stay correct. */
+function dataVer_() {
+  const today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "yyyy-MM-dd");
+  return getVer_("db") + "|" + today + "|" + Math.floor(Date.now() / 120000);
 }
 
 function cached_(key, ttl, compute) {
@@ -200,9 +268,17 @@ function doGet(e) {
           rooms:getActiveRooms_()
         });
 
-      case "getBootstrap":
-        // ONE request loads everything a portal needs (much faster than 4-5 calls)
-        return output(Object.assign({success:true}, getBootstrap_(session)));
+      case "getBootstrap": {
+        // ONE request loads everything a portal needs (much faster than 4-5 calls).
+        // If the page already has the latest data ("since"), answer in a few bytes.
+        const ver = dataVer_();
+
+        if (e.parameter.since && e.parameter.since === ver) {
+          return output({success:true, unchanged:true, ver:ver});
+        }
+
+        return output(Object.assign({success:true, ver:ver}, getBootstrap_(session)));
+      }
 
       case "getDashboard":
         return output({
@@ -325,6 +401,10 @@ function doPost(e) {
         result = setReservationView_(data);
         break;
 
+      case "setAdminReservationView":
+        result = setAdminReservationView_(data);
+        break;
+
       case "updateProfile":
         result = updateProfile_(data);
         break;
@@ -440,21 +520,30 @@ function cell_(header, v) {
 function getRows(name) {
   if (_rowsMemo_[name]) return _rowsMemo_[name].slice();
 
-  const sheet = getDB().getSheetByName(name);
-  let rows = [];
+  // 1) shared cache (no spreadsheet access at all when it hits)
+  const ckey = "rows:" + name + ":" + getVer_("db");
+  let rows = cacheGetBig_(ckey);
 
-  if (sheet && sheet.getLastRow() >= 2) {
-    const values = sheet.getDataRange().getValues();
-    const headers = values.shift();
+  // 2) read the sheet once, then remember it for the next requests
+  if (!rows) {
+    const sheet = getDB().getSheetByName(name);
+    rows = [];
 
-    rows = values.filter(row => row.some(v => v !== ""))
-      .map(row => {
-        const obj = {};
-        headers.forEach((h, i) => {
-          obj[h] = cell_(h, row[i]);
+    if (sheet && sheet.getLastRow() >= 2) {
+      const values = sheet.getDataRange().getValues();
+      const headers = values.shift();
+
+      rows = values.filter(row => row.some(v => v !== ""))
+        .map(row => {
+          const obj = {};
+          headers.forEach((h, i) => {
+            obj[h] = cell_(h, row[i]);
+          });
+          return obj;
         });
-        return obj;
-      });
+    }
+
+    cachePutBig_(ckey, rows, 300);
   }
 
   _rowsMemo_[name] = rows;
@@ -1013,17 +1102,25 @@ function markNotificationsRead_(d) {
   if (!session) throw new Error("Session expired.");
 
   const sheet = getDB().getSheetByName("Notifications");
-  const values = sheet.getDataRange().getValues();
-  const headers = values[0];
+  const last = sheet.getLastRow();
 
-  const recipientIndex = headers.indexOf("Recipient");
-  const readIndex = headers.indexOf("IsRead");
+  if (last >= 2) {
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const recipientCol = headers.indexOf("Recipient") + 1;
+    const readCol = headers.indexOf("IsRead") + 1;
 
-  for (let i = 1; i < values.length; i++) {
-    if (values[i][recipientIndex] === session.id ||
-        (session.role === "Admin" && values[i][recipientIndex] === "ALL_ADMINS")) {
-      sheet.getRange(i + 1, readIndex + 1).setValue(true);
-    }
+    const recipients = sheet.getRange(2, recipientCol, last - 1, 1).getValues();
+    const readRange = sheet.getRange(2, readCol, last - 1, 1);
+    const reads = readRange.getValues();
+
+    recipients.forEach((row, i) => {
+      if (row[0] === session.id ||
+          (session.role === "Admin" && row[0] === "ALL_ADMINS")) {
+        reads[i][0] = true;
+      }
+    });
+
+    readRange.setValues(reads);   // one write instead of one per row
   }
 
   clearRowsMemo_();
@@ -1558,15 +1655,15 @@ function setReservationView_(d) {
   const headers = ensureColumns_(sheet, ["InstructorView"]);
 
   const today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "yyyy-MM-dd");
-  const nowMin = toMinutes_(Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "HH:mm"));
 
-  // only the instructor's own cancelled or already-finished reservations
+  // only the instructor's own cancelled or finished reservations
+  // (date today or earlier, so server/browser timezone differences cannot block it)
   const ok = {};
   getRows("Reservations").forEach(r => {
     if (ids.indexOf(String(r.ReservationID)) < 0 || r.InstructorID !== session.id) return;
-    const over = r.Status === "Confirmed" &&
-      (r.Date < today || (r.Date === today && toMinutes_(r.EndTime) <= nowMin));
-    if (r.Status === "Cancelled" || over) ok[String(r.ReservationID)] = true;
+    if (r.Status === "Cancelled" || (r.Status === "Confirmed" && r.Date <= today)) {
+      ok[String(r.ReservationID)] = true;
+    }
   });
 
   const idCol = headers.indexOf("ReservationID") + 1;
@@ -1575,12 +1672,58 @@ function setReservationView_(d) {
   let count = 0;
 
   if (last >= 2) {
-    sheet.getRange(2, idCol, last - 1, 1).getValues().forEach((row, i) => {
-      if (ok[String(row[0])]) {
-        sheet.getRange(i + 2, viewCol).setValue(view);
-        count++;
-      }
+    const idValues = sheet.getRange(2, idCol, last - 1, 1).getValues();
+    const viewRange = sheet.getRange(2, viewCol, last - 1, 1);
+    const viewValues = viewRange.getValues();
+
+    idValues.forEach((row, i) => {
+      if (ok[String(row[0])]) { viewValues[i][0] = view; count++; }
     });
+
+    if (count) viewRange.setValues(viewValues);   // one write
+  }
+
+  clearRowsMemo_();
+  return {message: count + " reservation(s) updated.", count: count};
+}
+
+/* Administrator's Trash / permanent delete of COMPLETED reservations, saved in the
+   sheet so it is the same on every device. view: "" | "Trash" | "Deleted".
+   Rows stay in the sheet and usage reports still count them. */
+function setAdminReservationView_(d) {
+  getSession_(d.token, "Admin");
+  const view = String(d.view || "");
+
+  if (["", "Trash", "Deleted"].indexOf(view) < 0) throw new Error("Invalid view.");
+
+  const ids = [].concat(d.reservationIDs || []).map(String);
+  if (!ids.length) throw new Error("Nothing selected.");
+
+  const sheet = getDB().getSheetByName("Reservations");
+  const headers = ensureColumns_(sheet, ["AdminView"]);
+  const today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "yyyy-MM-dd");
+
+  const ok = {};
+  getRows("Reservations").forEach(r => {
+    if (ids.indexOf(String(r.ReservationID)) < 0) return;
+    if (r.Status === "Confirmed" && r.Date <= today) ok[String(r.ReservationID)] = true;
+  });
+
+  const idCol = headers.indexOf("ReservationID") + 1;
+  const viewCol = headers.indexOf("AdminView") + 1;
+  const last = sheet.getLastRow();
+  let count = 0;
+
+  if (last >= 2) {
+    const idValues = sheet.getRange(2, idCol, last - 1, 1).getValues();
+    const viewRange = sheet.getRange(2, viewCol, last - 1, 1);
+    const viewValues = viewRange.getValues();
+
+    idValues.forEach((row, i) => {
+      if (ok[String(row[0])]) { viewValues[i][0] = view; count++; }
+    });
+
+    if (count) viewRange.setValues(viewValues);   // one write
   }
 
   clearRowsMemo_();
