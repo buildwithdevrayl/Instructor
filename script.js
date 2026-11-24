@@ -949,7 +949,6 @@ function renderReservations() {
 let histView = "active";
 
 function renderHistory() {
-    const s = st();
     const inTrash = histView === "trash";
 
     const row = (r, label, cls) => `
@@ -977,11 +976,11 @@ function renderHistory() {
         (b.Date + (b.StartTime || "")).localeCompare(a.Date + (a.StartTime || ""));
 
     const eligible = reservations
-        .filter(r => !s.purgedRes.includes(r.ReservationID) && (isDone(r) || r.Status === "Cancelled"))
+        .filter(r => isDone(r) || r.Status === "Cancelled")
         .sort(byNewest);
 
-    const trashed = r => s.deletedRes.includes(r.ReservationID);
-    const archived = r => s.archivedRes.includes(r.ReservationID);
+    const trashed = r => r.InstructorView === "Trash";
+    const archived = r => r.InstructorView === "Archived";
 
     const inView = r =>
         histView === "trash" ? trashed(r)
@@ -1024,89 +1023,81 @@ function describeRes(r) {
     return `${r.RoomName || "classroom"} on ${dateText(r.Date)}, ${formatTime(r.StartTime)} - ${formatTime(r.EndTime)}`;
 }
 
-function purgeReservations(ids) {
-    const s = st();
-    ids.forEach(id => { if (!s.purgedRes.includes(id)) s.purgedRes.push(id); });
-    s.deletedRes = s.deletedRes.filter(x => !ids.includes(x));
-    s.archivedRes = s.archivedRes.filter(x => !ids.includes(x));
-    saveState();
+/* Saved on the server (Reservations sheet), so every device shows the same history */
+async function setResView(ids, view) {
+    await apiPost("setReservationView", {reservationIDs: ids, view});
+    reservations.forEach(r => { if (ids.includes(r.ReservationID)) r.InstructorView = view; });
+    if (view === "Deleted") reservations = reservations.filter(r => !ids.includes(r.ReservationID));
     renderHistory();
 }
 
-$("page-history").addEventListener("click", e => {
+$("page-history").addEventListener("click", async e => {
     const tab = e.target.closest("[data-hist-view]");
     if (tab) { histView = tab.dataset.histView; renderHistory(); return; }
 
-    const s = st();
+    try {
+        const arch = e.target.closest("[data-h-archive]");
+        if (arch) {
+            await setResView([arch.dataset.hArchive], histView === "archived" ? "" : "Archived");
+            toast(histView === "archived" ? "Reservation restored to history." : "Reservation archived.");
+            return;
+        }
 
-    const arch = e.target.closest("[data-h-archive]");
-    if (arch) {
-        const id = arch.dataset.hArchive;
-        if (s.archivedRes.includes(id)) s.archivedRes = s.archivedRes.filter(x => x !== id);
-        else s.archivedRes.push(id);
-        saveState();
-        renderHistory();
-        toast(histView === "archived" ? "Reservation restored to history." : "Reservation archived.");
-        return;
-    }
+        const del = e.target.closest("[data-h-delete]");
+        if (del) {
+            const id = del.dataset.hDelete;
+            const r = reservations.find(x => x.ReservationID === id);
+            await setResView([id], "Trash");
+            toast("Moved to Trash. Open the Trash tab to restore or delete it permanently.", "success", 5000);
+            if (r) addLocalNotif("Reservation deleted", `You moved the reservation for ${describeRes(r)} to Trash.`, {
+                RoomName: r.RoomName, BookingDate: r.Date, BookingTime: `${r.StartTime}-${r.EndTime}`
+            });
+            return;
+        }
 
-    const del = e.target.closest("[data-h-delete]");
-    if (del) {
-        const id = del.dataset.hDelete;
-        const r = reservations.find(x => x.ReservationID === id);
-        if (!s.deletedRes.includes(id)) s.deletedRes.push(id);
-        saveState();
-        renderHistory();
-        toast("Moved to Trash. Open the Trash tab to restore or delete it permanently.", "success", 5000);
-        if (r) addLocalNotif("Reservation deleted", `You moved the reservation for ${describeRes(r)} to Trash.`, {
-            RoomName: r.RoomName, BookingDate: r.Date, BookingTime: `${r.StartTime}-${r.EndTime}`
-        });
-        return;
-    }
+        const restore = e.target.closest("[data-h-restore]");
+        if (restore) {
+            await setResView([restore.dataset.hRestore], "");
+            toast("Reservation restored.");
+            return;
+        }
 
-    const restore = e.target.closest("[data-h-restore]");
-    if (restore) {
-        s.deletedRes = s.deletedRes.filter(x => x !== restore.dataset.hRestore);
-        saveState();
-        renderHistory();
-        toast("Reservation restored.");
-        return;
-    }
-
-    const purge = e.target.closest("[data-h-purge]");
-    if (purge) {
-        const id = purge.dataset.hPurge;
-        const r = reservations.find(x => x.ReservationID === id);
-        if (!confirm("Permanently delete this reservation from your history? The administrator's records are not affected.")) return;
-        purgeReservations([id]);
-        toast("Reservation permanently deleted from your history.");
-        if (r) addLocalNotif("Reservation permanently deleted", `You permanently deleted the reservation for ${describeRes(r)} from your history.`, {
-            RoomName: r.RoomName, BookingDate: r.Date, BookingTime: `${r.StartTime}-${r.EndTime}`
-        });
+        const purge = e.target.closest("[data-h-purge]");
+        if (purge) {
+            const id = purge.dataset.hPurge;
+            const r = reservations.find(x => x.ReservationID === id);
+            if (!confirm("Permanently delete this reservation from your history? The administrator's records are not affected.")) return;
+            await setResView([id], "Deleted");
+            toast("Reservation permanently deleted from your history.");
+            if (r) addLocalNotif("Reservation permanently deleted", `You permanently deleted the reservation for ${describeRes(r)} from your history.`, {
+                RoomName: r.RoomName, BookingDate: r.Date, BookingTime: `${r.StartTime}-${r.EndTime}`
+            });
+        }
+    } catch (error) {
+        toast(error.message, "error");
     }
 });
 
-$("deleteArchivedHistoryBtn").onclick = () => {
-    const s = st();
-    const ids = s.archivedRes.filter(id => !s.deletedRes.includes(id) && !s.purgedRes.includes(id) && reservations.some(r => r.ReservationID === id));
+$("deleteArchivedHistoryBtn").onclick = async () => {
+    const ids = reservations.filter(r => r.InstructorView === "Archived").map(r => r.ReservationID);
     if (!ids.length) return;
     if (!confirm(`Move ${ids.length} archived reservation(s) to Trash?`)) return;
-    ids.forEach(id => s.deletedRes.push(id));
-    s.archivedRes = s.archivedRes.filter(id => !ids.includes(id));
-    saveState();
-    renderHistory();
-    toast("Moved to Trash. You can restore them from the Trash tab.");
-    addLocalNotif("Reservations deleted", `${ids.length} archived reservation(s) were moved to Trash.`);
+    try {
+        await setResView(ids, "Trash");
+        toast("Moved to Trash. You can restore them from the Trash tab.");
+        addLocalNotif("Reservations deleted", `${ids.length} archived reservation(s) were moved to Trash.`);
+    } catch (error) { toast(error.message, "error"); }
 };
 
-$("emptyTrashHistoryBtn").onclick = () => {
-    const s = st();
-    const ids = s.deletedRes.filter(id => !s.purgedRes.includes(id) && reservations.some(r => r.ReservationID === id));
+$("emptyTrashHistoryBtn").onclick = async () => {
+    const ids = reservations.filter(r => r.InstructorView === "Trash").map(r => r.ReservationID);
     if (!ids.length) return;
     if (!confirm(`Permanently delete ${ids.length} reservation(s) in Trash from your history? This cannot be undone.`)) return;
-    purgeReservations(ids);
-    toast("Trash emptied.");
-    addLocalNotif("Trash emptied", `${ids.length} reservation(s) were permanently deleted from your history.`);
+    try {
+        await setResView(ids, "Deleted");
+        toast("Trash emptied.");
+        addLocalNotif("Trash emptied", `${ids.length} reservation(s) were permanently deleted from your history.`);
+    } catch (error) { toast(error.message, "error"); }
 };
 
 function fmtDateTime(value) {
