@@ -698,6 +698,7 @@ function setUser(user) {
     $("profileDepartment").value = user.department || "";
     $("profileEmail").value = user.email || "";
     $("profileContact").value = user.contact || "";
+    if ($("profileReminders")) $("profileReminders").checked = user.emailReminders !== false;
 }
 
 function showApp() {
@@ -1977,6 +1978,7 @@ $("profileForm").addEventListener("submit", async e => {
                 department:$("profileDepartment").value,
                 email:$("profileEmail").value,
                 contact:$("profileContact").value,
+                emailReminders:$("profileReminders") ? $("profileReminders").checked : true,
                 photoData:profilePhotoData,
                 photoSmall:profilePhotoSmall
             }
